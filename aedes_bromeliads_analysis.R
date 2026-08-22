@@ -1,14 +1,14 @@
-#############################
-### DATA ANALYSIS
-#############################
+#####################
+### DATA ANALYSIS ###
+#####################
 
 # Required package
 library(glmmTMB)
 
 
-#############################
-### DATA PREPARATION
-#############################
+########################
+### DATA PREPARATION ###
+########################
 
 # Import data
 dataset = read.table("https://raw.githubusercontent.com/buenoas/bromeliad/main/mosquito_data.txt",
