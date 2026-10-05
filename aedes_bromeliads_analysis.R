@@ -4,6 +4,8 @@
 
 # Required package
 library(glmmTMB)
+library(ggplot2)
+library(gridExtra)
 
 
 ########################
@@ -11,8 +13,7 @@ library(glmmTMB)
 ########################
 
 # Import data
-dataset = read.table("https://raw.githubusercontent.com/buenoas/bromeliad/main/mosquito_data.txt",
-                     header = TRUE)
+dataset = read.table("https://raw.githubusercontent.com/buenoas/bromeliad/main/mosquito_data.txt", header = TRUE)
 
 # Breeding-site type
 # Ovitraps are the reference category.
@@ -216,3 +217,332 @@ odds_ratio_occ
 # in bromeliads relative to ovitraps.
 
 abund_ratio
+
+
+##########################
+### DATA VISUALIZATION ###
+##########################
+
+#################################
+### 1. AE. AEGYPTI OCCURRENCE ###
+#################################
+
+# Format model estimates
+
+beta.glmm.occ = round(beta_occ, 2)
+z.glmm.occ = round(z_occ, 2)
+
+p.glmm.occ = ifelse(
+  p_occ < 0.001,
+  "< 0.001",
+  paste0("= ", sprintf("%.3f", p_occ)))
+
+
+# Organize the data
+
+df = data.frame(
+  location = dataset$location,
+  week = dataset$week,
+  trap = dataset$trap,
+  presence = dataset$presence)
+
+df = df[order(df$trap, df$week, df$presence),]
+df = df[order(df$location, decreasing = TRUE),]
+
+df$location = factor(df$location, levels = unique(df$location))
+df$week = factor(df$week, levels = unique(df$week))
+
+# Change presence values in bromeliads for visualization only
+
+df[which(df$trap == "bromeliad" & df$presence == 1), "presence"] = 2
+
+
+# Occurrence plot
+
+g_occ =
+  ggplot(data = df,
+         aes(x = week, y = location,
+             fill = as.factor(presence))) +
+  
+  geom_tile(colour = "white", linewidth = 1) +
+  
+  facet_wrap(~ trap,
+             labeller = labeller(
+               trap = c(
+                 ovitrap = "Ovitrap",
+                 bromeliad = "Bromeliad"))) +
+  
+  labs(x = "Week", y = "Site",
+       subtitle = bquote(
+         "Binomial GLMM:" ~
+           italic(beta) * " = " * .(beta.glmm.occ) * ", " *
+           italic(z) * " = " * .(z.glmm.occ) * ", " *
+           italic(p) * " " * .(p.glmm.occ))) +
+  
+  scale_fill_manual(
+    values = c(
+      "0" = "grey90",
+      "1" = "#414142",
+      "2" = "#008E00")) +
+  
+  scale_y_discrete(
+    labels = c("J", "I", "H", "G", "F",
+               "E", "D", "C", "B", "A")) +
+  
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 14, colour = "black"),
+        panel.grid = element_blank(),
+        axis.title = element_text(colour = "black"))
+
+g_occ
+
+
+ggsave(g_occ, filename = "graph_occurrence.png", dpi = 600,
+       width = 16, height = 16, units = "cm")
+
+
+################################
+### 2. AE. AEGYPTI ABUNDANCE ###
+################################
+
+# Format model estimates
+
+beta.glmm.abund = round(beta_abund, 2)
+z.glmm.abund = round(z_abund, 2)
+
+p.glmm.abund = ifelse(
+  p_abund < 0.001,
+  "< 0.001",
+  paste0("= ", sprintf("%.3f", p_abund)))
+
+
+# Abundance plot
+
+g_ab =
+  ggplot(data = dataset,
+         aes(x = trap, y = Aedes_aegypti_count,
+             colour = trap, fill = trap)) +
+  
+  labs(x = "Breeding site type",
+       y = expression("Number of emerged mosquitoes"),
+       subtitle = bquote(
+         "Negative binomial GLMM:" ~
+           italic(beta) * " = " * .(beta.glmm.abund) * ", " *
+           italic(z) * " = " * .(z.glmm.abund) * ", " *
+           italic(p) * " " * .(p.glmm.abund))) + 
+  
+  geom_boxplot(outlier.shape = NA, fill = NA,
+               width = 0.1, position = position_nudge(x = -0.3)) +
+  
+  geom_point(position = position_dodge2(0.3),
+             shape = 21, size = 2.5, alpha = 0.5) +
+  
+  stat_summary(
+    fun = mean, geom = "point", shape = 23,
+    size = 2.5, position = position_nudge(x = -0.3)) +
+  
+  scale_colour_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_fill_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_x_discrete(
+    labels = c(bromeliad = "Bromeliad",
+               ovitrap = "Ovitrap")) +
+  
+  theme_classic(base_size = 16) +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 14),
+        axis.line = element_line(linewidth = 1/2),
+        axis.ticks = element_line(linewidth = 1/2))
+
+g_ab
+
+
+ggsave(g_ab, filename = "graph_abundance.png", dpi = 600,
+       width = 16, height = 16, units = "cm")
+
+
+###################################
+### 3. ENVIRONMENTAL CONDITIONS ###
+###################################
+
+# Temperature
+
+g_temp =
+  ggplot(data = dataset,
+         aes(x = trap, y = temperature,
+             colour = trap, fill = trap)) +
+  
+  labs(x = "Breeding site type",
+       y = "Temperature (°C)",
+       tag = "(a)",
+       subtitle = bquote(
+         "Gaussian GLMM:" ~
+           italic(beta) * " = " * .(round(beta_temp, 2)) * ", " *
+           italic(z) * " = " * .(round(z_temp, 2)) * ", " *
+           italic(p) * " " * .(ifelse(
+             p_temp < 0.001,
+             "< 0.001",
+             paste0("= ", sprintf("%.3f", p_temp)))))) + 
+  
+  geom_boxplot(outlier.shape = NA, fill = NA,
+               width = 0.1, position = position_nudge(x = -0.3)) +
+  
+  geom_point(position = position_dodge2(0.3),
+             shape = 21, size = 2.5, alpha = 0.5) +
+  
+  stat_summary(
+    fun = mean, geom = "point", shape = 23,
+    size = 2.5, position = position_nudge(x = -0.3)) +
+  
+  scale_colour_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_fill_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_x_discrete(
+    labels = c(bromeliad = "Bromeliad",
+               ovitrap = "Ovitrap")) +
+  
+  scale_y_continuous(
+    limits = c(20, 35)) +
+  
+  theme_classic(base_size = 16) +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 14),
+        axis.line = element_line(linewidth = 1/2),
+        axis.ticks = element_line(linewidth = 1/2))
+
+g_temp
+
+ggsave(g_temp, filename = "graph_temperature.png", dpi = 600,
+       width = 16, height = 16, units = "cm")
+
+
+# Total dissolved solids (TDS)
+
+g_TDS =
+  ggplot(data = dataset,
+         aes(x = trap, y = TDS,
+             colour = trap, fill = trap)) +
+  
+  labs(x = "Breeding site type",
+       y = "Total dissolved solids (ppm)",
+       tag = "(b)",
+       subtitle = bquote(
+         "Gamma GLMM:" ~
+           italic(beta) * " = " * .(round(beta_TDS, 2)) * ", " *
+           italic(z) * " = " * .(round(z_TDS, 2)) * ", " *
+           italic(p) * " " * .(ifelse(
+             p_TDS < 0.001,
+             "< 0.001",
+             paste0("= ", sprintf("%.3f", p_TDS)))))) + 
+  
+  geom_boxplot(outlier.shape = NA, fill = NA,
+               width = 0.1, position = position_nudge(x = -0.3)) +
+  
+  geom_point(position = position_dodge2(0.3),
+             shape = 21, size = 2.5, alpha = 0.5) +
+  
+  stat_summary(
+    fun = mean, geom = "point", shape = 23,
+    size = 2.5, position = position_nudge(x = -0.3)) +
+  
+  scale_colour_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_fill_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_x_discrete(
+    labels = c(bromeliad = "Bromeliad",
+               ovitrap = "Ovitrap")) +
+  
+  scale_y_continuous(
+    limits = c(0, 400)) +
+  
+  theme_classic(base_size = 16) +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 14),
+        axis.line = element_line(linewidth = 1/2),
+        axis.ticks = element_line(linewidth = 1/2))
+
+g_TDS
+
+ggsave(g_TDS, filename = "graph_TDS.png", dpi = 600,
+       width = 16, height = 16, units = "cm")
+
+
+# pH
+
+g_pH =
+  ggplot(data = dataset,
+         aes(x = trap, y = pH,
+             colour = trap, fill = trap)) +
+  
+  labs(x = "Breeding site type",
+       y = "pH",
+       tag = "(c)",
+       subtitle = bquote(
+         "Gaussian GLMM:" ~
+           italic(beta) * " = " * .(round(beta_pH, 2)) * ", " *
+           italic(z) * " = " * .(round(z_pH, 2)) * ", " *
+           italic(p) * " " * .(ifelse(
+             p_pH < 0.001,
+             "< 0.001",
+             paste0("= ", sprintf("%.3f", p_pH)))))) + 
+  
+  geom_boxplot(outlier.shape = NA, fill = NA,
+               width = 0.1, position = position_nudge(x = -0.3)) +
+  
+  geom_point(position = position_dodge2(0.3),
+             shape = 21, size = 2.5, alpha = 0.5) +
+  
+  stat_summary(
+    fun = mean, geom = "point", shape = 23,
+    size = 2.5, position = position_nudge(x = -0.3)) +
+  
+  scale_colour_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_fill_manual(
+    values = c("ovitrap" = "#414142",
+               "bromeliad" = "#008E00")) +
+  
+  scale_x_discrete(
+    labels = c(bromeliad = "Bromeliad",
+               ovitrap = "Ovitrap")) +
+  
+  theme_classic(base_size = 16) +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(size = 12),
+        axis.text = element_text(size = 14),
+        axis.line = element_line(linewidth = 1/2),
+        axis.ticks = element_line(linewidth = 1/2))
+
+g_pH
+
+
+ggsave(g_pH, filename = "graph_pH.png", dpi = 600,
+       width = 16, height = 16, units = "cm")
+
+
+# Salva os tres graficos
+ggsave(grid.arrange(g_temp, g_TDS, g_pH, ncol = 3),
+       filename = "environmental_factors.png",
+       dpi = 600, width = 16*3, height = 16, units = "cm")
